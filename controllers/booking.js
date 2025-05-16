@@ -470,7 +470,7 @@ exports.checkOutStatus = async (req, res, next) => {
 
     // Check
     if (session.status !== "complete" || !bookingId) {
-      return renderError(400, "Something went wrong");
+      return renderError(res, 400, "Something went wrong"); // เพิ่ม res object
     }
 
     // Update db paymentStatus => true
