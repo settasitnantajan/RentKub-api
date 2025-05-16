@@ -466,10 +466,11 @@ exports.checkOutStatus = async (req, res, next) => {
     const { session_id } = req.params;
     const session = await stripe.checkout.sessions.retrieve(session_id);
     const bookingId = session.metadata?.bookingId;
-    console.log(bookingId);
+    console.log("Retrieved bookingId from Stripe session metadata:", bookingId);
 
     // Check
     if (session.status !== "complete" || !bookingId) {
+      console.error("Stripe session not complete or bookingId missing. Session status:", session.status, "Booking ID:", bookingId);
       return renderError(res, 400, "Something went wrong"); // เพิ่ม res object
     }
 
@@ -482,8 +483,9 @@ exports.checkOutStatus = async (req, res, next) => {
         paymentStatus: true,
       },
     });
+    console.log("Booking paymentStatus updated successfully for bookingId:", bookingId, "Result:", result); 
 
-    res.json({ message: "Payment Successfully", status: session.status });
+    res.json({ message: "Payment Successfully", status: session.status, bookingId: bookingId });
   } catch (error) {
     next(error);
   }

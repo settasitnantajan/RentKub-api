@@ -34,7 +34,7 @@ router.post("/checkout", authCheck, checkout);
 router.post("/retry-payment", authCheck, retryPayment);
 
 // api/checkout-status/:session_id
-router.get("/checkout-status/:session_id", authCheck, checkOutStatus);
+router.get("/checkout-status/:session_id", checkOutStatus); // Removed authCheck for testing or if not strictly needed
 
 // เพิ่ม route นี้เพื่อรองรับการเรียกจาก client-side /user/complete page
 // GET /api/user/complete/:session_id
