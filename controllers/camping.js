@@ -143,12 +143,11 @@ exports.readCamping = async (req, res, next) => {
                 }
               },
             },
-          },
-        },
-        profile: true, 
-        // These take/skip apply to the 'reviews' relation itself
-        take: reviewsLimit, 
-        skip: (reviewsPage - 1) * reviewsLimit, 
+          }, // End of reviews include
+          take: reviewsLimit, // Apply take for reviews here
+          skip: (reviewsPage - 1) * reviewsLimit, // Apply skip for reviews here
+        }, // End of reviews relation options
+        profile: true, // Include host profile
       },
     });
 
@@ -157,8 +156,13 @@ exports.readCamping = async (req, res, next) => {
     }
 
     // --- Get publicly unavailable dates ---
-    // This should be done regardless of whether a user is logged in or not
-    const publiclyUnavailableDates = await getUnavailableDatesForLandmark(landmarkId, landmark.totalRooms);
+    // Ensure totalRooms is a valid number before passing to the utility
+    // Default to 0 if landmark.totalRooms is null, undefined, or not a non-negative number.
+    const totalRoomsForCalendar = (typeof landmark.totalRooms === 'number' && landmark.totalRooms >= 0)
+                                    ? landmark.totalRooms
+                                    : 0;
+
+    const publiclyUnavailableDates = await getUnavailableDatesForLandmark(landmarkId, totalRoomsForCalendar);
 
     // Calculate averageRating and totalReviewCount from ALL reviews in the DB for this landmark
     // This requires an additional query or a more complex aggregate query
@@ -175,16 +179,17 @@ exports.readCamping = async (req, res, next) => {
     });
 
     const totalReviewCount = reviewStats._count.id || 0;
-    let averageRating = 0;
+    let calculatedAverageRating = 0; // Initialize as a number
+
     if (totalReviewCount > 0 && reviewStats._avg.overallRating !== null) {
-      averageRating = reviewStats._avg.overallRating;
+      calculatedAverageRating = reviewStats._avg.overallRating;
     }
 
     let isFavoriteForCurrentUser = false;
     if (clerkId) { // If a user is logged in (clerkId exists)
       const favoriteRecord = await prisma.favorite.findFirst({
         where: {
-          profileId: clerkId, // Use the string Clerk ID for the Favorite query
+          profileId: clerkId, 
           landmarkId: landmarkId,
         },
         select: { id: true } // We only need to know if the record exists
@@ -197,7 +202,7 @@ exports.readCamping = async (req, res, next) => {
     const landmarkWithDetails = {
       ...landmark,
       isFavorite: isFavoriteForCurrentUser, // Set the user-specific favorite status
-      averageRating: parseFloat(averageRating.toFixed(1)),
+      averageRating: parseFloat(calculatedAverageRating.toFixed(1)), // Format to one decimal place
       reviewCount: totalReviewCount, // Use total review count from aggregation
       // reviews: landmark.reviews, // This now contains only the first page of reviews
       publiclyUnavailableDates: publiclyUnavailableDates, // Add this to the response
@@ -1127,6 +1132,7 @@ exports.getPaginatedReviews = async (req, res, next) => {
 
     // Prisma does not have findAndCountAll. Use two separate queries.
     const reviews = await prisma.review.findMany({
+      where: { landmarkId: landmarkId }, // <-- ***** ADD THIS LINE *****
       include: {
         profile: { // Include the profile of the reviewer
           select: {
