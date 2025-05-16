@@ -10,7 +10,8 @@ const {
   actionFavorite,
   listFavorites,
   filterCamping,
-  getBookedDates, // Import the getBookedDates function
+  getBookedDates,
+  getPaginatedReviews, // Import the new controller function
 } = require("../controllers/camping");
 
 const { authCheck } = require("../middlewares/auth");
@@ -39,5 +40,8 @@ router.get("/filter-camping", filterCamping);
 
 // --- New Route for Booked Dates (Public) ---
 router.get("/camping/:id/booked-dates", getBookedDates);
+
+// --- New Route for Paginated Reviews (Public) ---
+router.get("/camping/:id/reviews", getPaginatedReviews);
 
 module.exports = router;

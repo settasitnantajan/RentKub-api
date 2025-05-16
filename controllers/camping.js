@@ -108,13 +108,15 @@ exports.readCamping = async (req, res, next) => {
     }
 
     const clerkId = req.auth?.userId; // Get Clerk User ID from req.auth (populated by Clerk middleware if token is valid)
+    const reviewsPage = 1; // Default to page 1 for reviews
+    const reviewsLimit = 5; // Number of reviews per page (e.g., 5)
     
     const landmark = await prisma.landmark.findFirst({
       where: {
         id: landmarkId, // Use the numeric landmarkId
       },
       include: {
-        reviews: { // Include reviews
+        reviews: { // Include reviews (first page)
           orderBy: {
             createdAt: 'desc', // Show newest reviews first
           },
@@ -129,6 +131,8 @@ exports.readCamping = async (req, res, next) => {
                 clerkId: true, // Useful for keys or other identification
               },
             },
+            take: reviewsLimit, // Limit the number of reviews fetched
+            skip: (reviewsPage - 1) * reviewsLimit, // Skip for pagination (0 for first page)
             // Include comments associated with the review (this is where host replies will be)
             comments: {
               include: {
@@ -152,15 +156,24 @@ exports.readCamping = async (req, res, next) => {
     // This should be done regardless of whether a user is logged in or not
     const publiclyUnavailableDates = await getUnavailableDatesForLandmark(landmarkId, landmark.totalRooms);
 
-    // Calculate averageRating and reviewCount
-    const reviewCount = landmark.reviews?.length || 0;
+    // Calculate averageRating and totalReviewCount from ALL reviews in the DB for this landmark
+    // This requires an additional query or a more complex aggregate query
+    const reviewStats = await prisma.review.aggregate({
+      _count: {
+        id: true,
+      },
+      _avg: {
+        overallRating: true,
+      },
+      where: {
+        landmarkId: landmarkId,
+      },
+    });
+
+    const totalReviewCount = reviewStats._count.id || 0;
     let averageRating = 0;
-    if (reviewCount > 0) {
-      const sumOfRatings = landmark.reviews.reduce(
-        (acc, review) => acc + (review.overallRating || 0),
-        0
-      );
-      averageRating = sumOfRatings / reviewCount;
+    if (totalReviewCount > 0 && reviewStats._avg.overallRating !== null) {
+      averageRating = reviewStats._avg.overallRating;
     }
 
     let isFavoriteForCurrentUser = false;
@@ -181,7 +194,8 @@ exports.readCamping = async (req, res, next) => {
       ...landmark,
       isFavorite: isFavoriteForCurrentUser, // Set the user-specific favorite status
       averageRating: parseFloat(averageRating.toFixed(1)),
-      reviewCount: reviewCount,
+      reviewCount: totalReviewCount, // Use total review count from aggregation
+      // reviews: landmark.reviews, // This now contains only the first page of reviews
       publiclyUnavailableDates: publiclyUnavailableDates, // Add this to the response
     };
 
@@ -1088,3 +1102,56 @@ exports.getBookedDates = async (req, res, next) => {
   }
 };
 // --- End New Function ---
+
+// --- New Endpoint for Paginated Reviews ---
+exports.getPaginatedReviews = async (req, res, next) => {
+  try {
+    const landmarkId = Number(req.params.id);
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 5; // Default to 5 reviews per page
+    const offset = (page - 1) * limit;
+
+    if (isNaN(landmarkId) || landmarkId <= 0) {
+      return renderError(res, 400, "Invalid Landmark ID format.");
+    }
+    if (page <= 0) {
+      return renderError(res, 400, "Page number must be positive.");
+    }
+    if (limit <= 0 || limit > 50) { // Set a reasonable max limit
+      return renderError(res, 400, "Limit must be between 1 and 50.");
+    }
+
+    const { count, rows: reviews } = await prisma.review.findAndCountAll({
+      where: { landmarkId: landmarkId },
+      include: {
+        profile: { // Include the profile of the reviewer
+          select: {
+            firstname: true,
+            lastname: true,
+            username: true,
+            email: true, // Optional
+            imageUrl: true,
+            clerkId: true,
+          },
+        },
+        comments: { // Include comments associated with the review
+          include: {
+            profile: { // Include the profile of the commenter
+              select: { firstname: true, lastname: true, username: true, imageUrl: true, clerkId: true }
+            }
+          },
+          orderBy: { createdAt: 'asc' } // Show oldest comments first for a review
+        },
+      },
+      orderBy: { createdAt: 'desc' }, // Show newest reviews first
+      take: limit,
+      skip: offset,
+    });
+
+    res.json({ reviews, currentPage: page, totalPages: Math.ceil(count / limit), totalReviews: count });
+  } catch (error) {
+    console.error("Error fetching paginated reviews:", error);
+    next(error);
+  }
+};
+// --- End New Endpoint for Paginated Reviews ---
