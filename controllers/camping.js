@@ -105,7 +105,7 @@ exports.readCamping = async (req, res, next) => {
     const landmarkId = Number(req.params.id); // Use a distinct variable name
     if (isNaN(landmarkId)) {
       return renderError(res, 400, "Invalid Landmark ID format.");
-    }
+    } 
 
     const clerkId = req.auth?.userId; // Get Clerk User ID from req.auth (populated by Clerk middleware if token is valid)
     const reviewsPage = 1; // Default to page 1 for reviews
@@ -128,13 +128,15 @@ exports.readCamping = async (req, res, next) => {
                 username: true,
                 email: true,
                 imageUrl: true,
-                clerkId: true, // Useful for keys or other identification
+                clerkId: true, 
               },
             },
-            take: reviewsLimit, // Limit the number of reviews fetched
-            skip: (reviewsPage - 1) * reviewsLimit, // Skip for pagination (0 for first page)
             // Include comments associated with the review (this is where host replies will be)
             comments: {
+              orderBy: { 
+                createdAt: 'asc' // Show oldest comments first for a review
+              },
+              take: 5, // Limit the number of comments shown per review initially
               include: {
                 profile: { // Include the profile of the commenter (could be the host)
                   select: { firstname: true, lastname: true, username: true, imageUrl: true, clerkId: true }
@@ -143,8 +145,10 @@ exports.readCamping = async (req, res, next) => {
             },
           },
         },
-        // Assuming you also want to show host details
-        profile: true, // Or select specific fields for the host's profile
+        profile: true, 
+        // These take/skip apply to the 'reviews' relation itself
+        take: reviewsLimit, 
+        skip: (reviewsPage - 1) * reviewsLimit, 
       },
     });
 
@@ -1121,8 +1125,8 @@ exports.getPaginatedReviews = async (req, res, next) => {
       return renderError(res, 400, "Limit must be between 1 and 50.");
     }
 
-    const { count, rows: reviews } = await prisma.review.findAndCountAll({
-      where: { landmarkId: landmarkId },
+    // Prisma does not have findAndCountAll. Use two separate queries.
+    const reviews = await prisma.review.findMany({
       include: {
         profile: { // Include the profile of the reviewer
           select: {
@@ -1146,6 +1150,10 @@ exports.getPaginatedReviews = async (req, res, next) => {
       orderBy: { createdAt: 'desc' }, // Show newest reviews first
       take: limit,
       skip: offset,
+    });
+    
+    const count = await prisma.review.count({
+      where: { landmarkId: landmarkId },
     });
 
     res.json({ reviews, currentPage: page, totalPages: Math.ceil(count / limit), totalReviews: count });
