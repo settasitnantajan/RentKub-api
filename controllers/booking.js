@@ -110,8 +110,8 @@ exports.retryPayment = async (req, res, next) => {
         },
       ],
       mode: "payment",
-      success_url: `${process.env.CLIENT_URL || "http://localhost:5173"}/user/complete/{CHECKOUT_SESSION_ID}?retry=true&booking_id=${booking.id}`,
-      cancel_url: `${process.env.CLIENT_URL || "http://localhost:5173"}/user/myorders?payment_cancelled=true&booking_id=${booking.id}`,
+      success_url: `${process.env.CLIENT_URL || "https://rentkub2025-api.vercel.app/api"}/user/complete/{CHECKOUT_SESSION_ID}?retry=true&booking_id=${booking.id}`,
+      cancel_url: `${process.env.CLIENT_URL || "https://rentkub2025-api.vercel.app/api"}/user/myorders?payment_cancelled=true&booking_id=${booking.id}`,
       client_reference_id: booking.id.toString(),
       metadata: {
         bookingId: booking.id.toString(),
@@ -449,7 +449,7 @@ exports.checkout = async (req, res, next) => {
       mode: "payment",
       // Use environment variable for flexibility
       return_url: `${
-        process.env.CLIENT_URL || "http://localhost:5173"
+        process.env.CLIENT_URL || "https://rentkub2025-api.vercel.app/api"
       }/user/complete/{CHECKOUT_SESSION_ID}`,
     });
 
