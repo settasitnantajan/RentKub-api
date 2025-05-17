@@ -217,8 +217,6 @@ exports.readCamping = async (req, res, next) => {
 
 exports.createCamping = async (req, res, next) => {
   try {
-    console.log("Received request body:", req.body);
-
     const {
       title,
       description,
@@ -235,7 +233,6 @@ exports.createCamping = async (req, res, next) => {
       baths, // <-- Destructure baths
     } = req.body;
     const { id: profileId } = req.user;
-    console.log("Received images:", images); // Log the received images array
 
     // --- Backend Validation ---
     if (!profileId) {
@@ -320,7 +317,6 @@ exports.createCamping = async (req, res, next) => {
     // --- End Validation ---
 
     const amenitiesJsonString = JSON.stringify(amenities);
-    console.log("Amenities JSON string:", amenitiesJsonString);
 
     const dataToSave = {
       title,
@@ -339,13 +335,10 @@ exports.createCamping = async (req, res, next) => {
       amenities: amenitiesJsonString,
     };
 
-    console.log("Data being sent to Prisma:", dataToSave);
-
     const camping = await prisma.landmark.create({
       data: dataToSave,
     });
 
-    console.log("Prisma create successful:", camping);
     // Parse amenities before sending back response for consistency
     const resultWithParsedAmenities = {
       ...camping,
@@ -391,10 +384,6 @@ exports.updateCamping = async (req, res, next) => {
       baths, // <-- Destructure baths
     } = req.body;
 
-    // --- TEMPORARY DEBUG LOGGING ---
-    console.log("--- Update Camping ---");
-    console.log("Received amenities TYPE:", typeof amenities);
-    console.log("Received amenities VALUE:", amenities);
     const landmarkIdNum = Number(landmarkId);
 
     // --- Validation ---
@@ -505,9 +494,6 @@ exports.updateCamping = async (req, res, next) => {
         .filter(Boolean); // Filter out nulls if parsing failed
 
       if (publicIdsToDelete.length > 0) {
-        console.log(
-          `Attempting to delete ${publicIdsToDelete.length} old Cloudinary images...`
-        );
         // Use Promise.allSettled for robustness
         const deletionResults = await Promise.allSettled(
           publicIdsToDelete.map((publicId) =>
@@ -516,10 +502,6 @@ exports.updateCamping = async (req, res, next) => {
         );
         deletionResults.forEach((result, index) => {
           if (result.status === "fulfilled") {
-            console.log(
-              `Cloudinary deletion for ${publicIdsToDelete[index]} completed:`,
-              result.value
-            );
           } else {
             console.error(
               `Failed Cloudinary deletion for ${publicIdsToDelete[index]}:`,
@@ -614,36 +596,24 @@ exports.deleteCamping = async (req, res, next) => {
     // This simple delete might not be suitable if you need to prevent deletion of booked landmarks.
     await prisma.favorite.deleteMany({ where: { landmarkId: landmarkIdNum } });
     await prisma.booking.deleteMany({ where: { landmarkId: landmarkIdNum } });
-    console.log(
-      `Deleted related favorites and bookings for landmark ID: ${landmarkIdNum}`
-    );
 
     // 4. Delete the landmark record
     await prisma.landmark.delete({
       where: { id: landmarkIdNum },
     });
-    console.log(`Deleted landmark record with ID: ${landmarkIdNum}`);
 
     // 5. Delete images from Cloudinary
     if (landmarkToDelete.images && landmarkToDelete.images.length > 0) {
       const publicIds = landmarkToDelete.images
         .map(getPublicIdFromUrl) // Use the helper
         .filter(Boolean);
-
       if (publicIds.length > 0) {
-        console.log(
-          `Attempting to delete ${publicIds.length} Cloudinary images...`
-        );
         // Use Promise.allSettled for robustness
         const deletionResults = await Promise.allSettled(
           publicIds.map((publicId) => cloudinary.uploader.destroy(publicId))
         );
         deletionResults.forEach((result, index) => {
           if (result.status === "fulfilled") {
-            console.log(
-              `Cloudinary deletion for ${publicIds[index]} completed:`,
-              result.value
-            );
           } else {
             console.error(
               `Failed Cloudinary deletion for ${publicIds[index]}:`,
@@ -774,8 +744,6 @@ exports.filterCamping = async (req, res, next) => {
     const userId = req.query.profileId || req.user?.id; // Prioritize profileId from query if passed
     const prismaClient = prisma; // Alias for clarity in helper function
 
-    console.log("Filtering with query:", req.query);
-
     // Prepare filter conditions for Prisma
     const whereClause = {
       AND: [], // Use AND to combine all conditions
@@ -801,7 +769,6 @@ exports.filterCamping = async (req, res, next) => {
         reqCheckInDate.setUTCHours(0, 0, 0, 0);
         reqCheckOutDate.setUTCHours(0, 0, 0, 0);
         filterByDate = true;
-        console.log(`Filtering for dates: ${reqCheckInDate.toISOString()} to ${reqCheckOutDate.toISOString()}`);
       }
     }
 
@@ -867,12 +834,6 @@ exports.filterCamping = async (req, res, next) => {
 
     // --- NOTE: Amenities filter removed from Prisma query due to 'contains' validation error on Json type.
     // --- We will filter amenities after fetching the results. ---
-
-    // Log the clause *before* fetching (it won't include amenities filter now)
-    console.log(
-      "Constructed Prisma where clause:",
-      JSON.stringify(whereClause, null, 2)
-    );
 
     // --- Fetch Landmarks ---
     const result = await prisma.landmark.findMany({
@@ -952,7 +913,6 @@ exports.filterCamping = async (req, res, next) => {
     // --- Filter results based on amenities in application code ---
     let filteredByAmenitiesResults = landmarksToProcess; // Start with date-filtered (or all if no date filter)
     if (amenitiesArray.length > 0) {
-      console.log("Filtering fetched results for amenities:", amenitiesArray);
       filteredByAmenitiesResults = landmarksToProcess.filter((item) => {
         let itemAmenities = [];
         try {

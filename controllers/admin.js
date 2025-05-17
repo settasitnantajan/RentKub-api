@@ -122,13 +122,11 @@ exports.deleteCamping = async (req, res, next) => {
     const deletedFavorites = await prisma.favorite.deleteMany({
       where: { landmarkId: campingId },
     });
-    console.log(`Deleted ${deletedFavorites.count} favorite records.`);
 
     // Delete related bookings (Consider business logic for paid/active bookings if needed)
     const deletedBookings = await prisma.booking.deleteMany({
       where: { landmarkId: campingId },
     });
-    console.log(`Deleted ${deletedBookings.count} booking records.`);
     // --- End handling related records ---
 
     // 2. Delete the landmark record from the database
@@ -137,7 +135,6 @@ exports.deleteCamping = async (req, res, next) => {
         id: campingId,
       },
     });
-    console.log(`Deleted landmark record with ID: ${campingId}`);
 
     // 3. If the landmark had images, delete them from Cloudinary
     if (landmarkToDelete.images && landmarkToDelete.images.length > 0) {
@@ -147,27 +144,12 @@ exports.deleteCamping = async (req, res, next) => {
         .filter(Boolean); // Filter out any nulls if extraction failed
 
       if (publicIds.length > 0) {
-        console.log(
-          `Attempting to delete ${
-            publicIds.length
-          } Cloudinary images with public IDs: ${publicIds.join(", ")}`
-        );
-
         // Use Promise.allSettled to attempt all deletions even if some fail
         const deletionResults = await Promise.allSettled(
           publicIds.map((publicId) =>
             cloudinary.uploader.destroy(publicId, (error, result) => {
               // Optional: Callback for logging individual results immediately
               if (error) {
-                console.error(
-                  `Cloudinary deletion error for ${publicId}:`,
-                  error
-                );
-              } else {
-                console.log(
-                  `Cloudinary deletion result for ${publicId}:`,
-                  result
-                );
               }
             })
           )
@@ -175,13 +157,7 @@ exports.deleteCamping = async (req, res, next) => {
 
         // Log settled results (useful for seeing which ones failed after all promises complete)
         deletionResults.forEach((result, index) => {
-          if (result.status === "fulfilled") {
-            // Result from cloudinary.uploader.destroy is often { result: 'ok' } or { result: 'not found' }
-            console.log(
-              `Cloudinary deletion attempt for ${publicIds[index]} completed:`,
-              result.value
-            );
-          } else {
+          if (result.status === "rejected") {
             // Log errors but don't fail the whole request
             console.error(
               `Failed Cloudinary deletion promise for ${publicIds[index]}:`,
@@ -189,11 +165,7 @@ exports.deleteCamping = async (req, res, next) => {
             );
           }
         });
-      } else {
-        console.log("No valid public IDs found to delete from Cloudinary.");
       }
-    } else {
-      console.log("Landmark had no images associated in the database.");
     }
 
     res.json({

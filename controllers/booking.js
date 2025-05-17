@@ -334,12 +334,6 @@ exports.createBooking = async (req, res, next) => {
 
     // Calculate total price (if available)
     // --- Add Logging before calTotal ---
-    console.log(
-      `[createBooking] Calculating total for checkIn: ${checkIn} (Type: ${typeof checkIn}), checkOut: ${checkOut} (Type: ${typeof checkOut}), price: ${
-        camping.price
-      }`
-    );
-    // --- End Logging ---
     const { total, totalNights } = calTotal(checkIn, checkOut, camping.price);
     // --- Add Logging before create ---
     console.log(`[createBooking] Attempting to create booking with data:`, {
@@ -350,7 +344,6 @@ exports.createBooking = async (req, res, next) => {
       total,
       totalNights,
     });
-    // --- End Logging ---
 
     // Insert to db
     const booking = await prisma.booking.create({
@@ -363,13 +356,11 @@ exports.createBooking = async (req, res, next) => {
         totalNights,
       },
     });
-    console.log("[createBooking] Booking created successfully:", booking); // Log success
     const bookingId = booking.id;
 
     // Send id booking to react
     res.json({ message: "Booking Successfully", result: bookingId });
   } catch (error) {
-    // --- Enhanced Error Logging ---
     console.error("[createBooking] Error caught:", error);
     next(error);
   }
@@ -378,19 +369,15 @@ exports.createBooking = async (req, res, next) => {
 exports.checkout = async (req, res, next) => {
   try {
     const { id } = req.body; // ID comes from the request body
-    console.log("Checkout attempt for booking ID:", id, typeof id); // <-- Add logging
 
     // Ensure ID is a valid number before querying
     const bookingId = Number(id);
     if (isNaN(bookingId) || bookingId <= 0) {
-      console.error("Invalid booking ID received:", id);
       // Use return res.status().json() for consistency
       return res.status(400).json({ message: "Invalid Booking ID format." });
       // Or use your renderError if it handles sending responses:
       // return renderError(res, 400, "Invalid Booking ID format.");
     }
-
-    console.log("Searching for booking with numeric ID:", bookingId); // <-- Add logging
 
     //1.find booking
     const booking = await prisma.booking.findFirst({
@@ -408,11 +395,7 @@ exports.checkout = async (req, res, next) => {
       },
     });
 
-    // Log if booking was found or not
-    console.log("Booking found:", booking ? booking.id : "Not Found");
-
     if (!booking) {
-      console.error(`Booking with ID ${bookingId} not found in database.`);
       // Use 404 Not Found, as the ID format might be okay, but the resource doesn't exist
       return res.status(404).json({ message: "Booking not found" });
       // Or use your renderError if it handles sending responses:
@@ -466,16 +449,14 @@ exports.checkOutStatus = async (req, res, next) => {
     const { session_id } = req.params;
     const session = await stripe.checkout.sessions.retrieve(session_id);
     const bookingId = session.metadata?.bookingId;
-    console.log("Retrieved bookingId from Stripe session metadata:", bookingId);
 
     // Check
     if (session.status !== "complete" || !bookingId) {
-      console.error("Stripe session not complete or bookingId missing. Session status:", session.status, "Booking ID:", bookingId);
       return renderError(res, 400, "Something went wrong"); // เพิ่ม res object
     }
 
     // Update db paymentStatus => true
-    const result = await prisma.booking.update({
+    await prisma.booking.update({
       where: {
         id: Number(bookingId),
       },
@@ -483,7 +464,6 @@ exports.checkOutStatus = async (req, res, next) => {
         paymentStatus: true,
       },
     });
-    console.log("Booking paymentStatus updated successfully for bookingId:", bookingId, "Result:", result); 
 
     res.json({ message: "Payment Successfully", status: session.status, bookingId: bookingId });
   } catch (error) {
@@ -555,24 +535,13 @@ exports.cancelBookingByUser = async (req, res, next) => {
         });
     }
 
-    console.log(
-      `[cancelBookingByUser] Processing booking ID ${bookingId}. Current status:`,
-      JSON.stringify(booking, null, 2)
-    );
-
     // Conditions under which a user CANNOT cancel:
     if (booking.cancelledByUserStatus) {
-      console.log(
-        `[cancelBookingByUser] Booking ${bookingId} is already cancelled by user.`
-      );
       return res
         .status(400)
         .json({ success: false, message: "Booking is already cancelled." });
     }
     if (booking.checkInStatus || booking.checkOutStatus) {
-      console.log(
-        `[cancelBookingByUser] Booking ${bookingId} is checked in or out.`
-      );
       return res
         .status(400)
         .json({
@@ -582,9 +551,6 @@ exports.cancelBookingByUser = async (req, res, next) => {
     }
     // If booking is paid AND confirmed by the host, user cannot cancel through this flow.
     if (booking.paymentStatus && booking.confirmStatus) {
-      console.log(
-        `[cancelBookingByUser] Booking ${bookingId} is paid AND confirmed by host. Cannot cancel.`
-      );
       return res
         .status(400)
         .json({
